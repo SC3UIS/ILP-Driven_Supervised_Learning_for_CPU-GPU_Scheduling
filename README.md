@@ -93,21 +93,6 @@ The labeled CSV files contain one row per experimental observation with the foll
 
 ---
 
-## Requirements
-
-**Python:**
-```
-pulp
-xgboost
-scikit-learn
-optuna
-pandas
-numpy
-matplotlib
-seaborn
-```
-
-
 ## Citation
 
 
