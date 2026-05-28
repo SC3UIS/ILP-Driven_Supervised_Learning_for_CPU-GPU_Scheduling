@@ -1,7 +1,3 @@
-"""
-  python cpu_gpu_ml_models.py --input dataset.csv
-"""
-
 import argparse
 import os
 import warnings
@@ -30,9 +26,9 @@ from sklearn.metrics import (
 
 RANDOM_STATE  = 42
 TEST_SIZE     = 0.20
-CV_FOLDS      = 5        # pliegues para Optuna (rápido) y evaluación final
-OPTUNA_TRIALS = 100       # nº de trials por modelo (sobreescribible con --trials)
-OPTUNA_CV     = 5        # pliegues dentro de Optuna
+CV_FOLDS      = 5        
+OPTUNA_TRIALS = 100      
+OPTUNA_CV     = 5  
 
 PALETTE = {
     'rf':   '#2E86AB',
@@ -52,21 +48,21 @@ plt.rcParams.update({
 })
 
 FEATURE_COLS = [
-    'kernel_encoded',   # GEMM=0, FFT=1, SpMV=2  (LabelEncoder)
-    'N',                # tamaño del problema
-    'nnz',              # entradas no cero (0 para GEMM/FFT)
-    'sparsity',         # densidad de la matriz (0 para GEMM/FFT)
-    'op_intensity_cpu', # FLOPs/byte medido en CPU
-    'op_intensity_gpu', # FLOPs/byte medido en GPU
-    'cpu_time_s',       # tiempo de ejecución CPU (segundos)
-    'gpu_time_s',       # tiempo de ejecución GPU (segundos)
-    'cpu_energy_j',     # energía CPU (julios)
-    'gpu_energy_j',     # energía GPU (julios)
-    'gflops_cpu',       # rendimiento efectivo CPU
-    'gflops_gpu',       # rendimiento efectivo GPU
-    'bw_gbps_cpu',      # ancho de banda medido CPU
-    'bw_gbps_gpu',      # ancho de banda medido GPU
-    'speedup',          # T_cpu / T_gpu  (feature derivada)
+    'kernel_encoded',
+    'N',
+    'nnz',
+    'sparsity',
+    'op_intensity_cpu',
+    'op_intensity_gpu',
+    'cpu_time_s',
+    'gpu_time_s',
+    'cpu_energy_j',
+    'gpu_energy_j',
+    'gflops_cpu',
+    'gflops_gpu',
+    'bw_gbps_cpu',
+    'bw_gbps_gpu', 
+    'speedup',  
 ]
 TARGET_COL = 'ilp_label'
 
@@ -107,11 +103,11 @@ def build_features(df: pd.DataFrame):
     df['kernel_encoded'] = le.fit_transform(df['kernel'])
     df['kernel_type']    = df['kernel']
     df['speedup'] = df['cpu_time_s'] / (df['gpu_time_s'] + 1e-9)
-    # nnz = 0 para GEMM y FFT si no se rellenó antes
+
     if 'nnz' not in df.columns:
         df['nnz'] = 0
     df['nnz'] = df['nnz'].fillna(0).astype(float)
-    # Garantizar que columnas de rendimiento no tengan NaN
+
     for col in ['gflops_cpu', 'gflops_gpu', 'bw_gbps_cpu', 'bw_gbps_gpu',
                 'op_intensity_cpu', 'op_intensity_gpu']:
         if col in df.columns:
@@ -138,16 +134,7 @@ def _cv_auc(model, X_tr, y_tr, n_splits: int) -> float:
 
 def optimize_rf(X_train: np.ndarray, y_train: np.ndarray,
                 n_trials: int = OPTUNA_TRIALS) -> dict:
-    """
-    Busca los mejores hiperparámetros para RandomForest con Optuna TPE.
-    Espacio de búsqueda:
-      n_estimators       [100, 800]
-      max_depth          [3, 30] o None
-      min_samples_split  [2, 20]
-      min_samples_leaf   [1, 10]
-      max_features       ['sqrt', 'log2', 0.3, 0.5, 0.7]
-      max_samples        [0.5, 1.0]  (bootstrap fraction)
-    """
+    
     n0 = int((y_train == 0).sum())
     n1 = int((y_train == 1).sum())
 
@@ -175,7 +162,7 @@ def optimize_rf(X_train: np.ndarray, y_train: np.ndarray,
     study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
 
     best = study.best_params.copy()
-    # Reconstruir max_depth desde los dos params separados
+
     if best.pop('max_depth_none'):
         best['max_depth'] = None
     best['class_weight'] = 'balanced'
@@ -194,24 +181,10 @@ def optimize_rf(X_train: np.ndarray, y_train: np.ndarray,
 
 def optimize_xgb(X_train: np.ndarray, y_train: np.ndarray,
                  n_trials: int = OPTUNA_TRIALS) -> dict:
-    """
-    Busca los mejores hiperparámetros para XGBoost con Optuna TPE.
-    Espacio de búsqueda:
-      n_estimators      [100, 800]
-      max_depth         [3, 12]
-      learning_rate     [0.005, 0.3]  (log-uniforme)
-      subsample         [0.5, 1.0]
-      colsample_bytree  [0.4, 1.0]
-      colsample_bylevel [0.4, 1.0]
-      reg_lambda        [1e-3, 10.0]  (log-uniforme)
-      reg_alpha         [1e-4, 5.0]   (log-uniforme)
-      min_child_weight  [1, 20]
-      gamma             [0.0, 5.0]
-      grow_policy       ['depthwise', 'lossguide']
-    """
+                   
     n0 = int((y_train == 0).sum())
     n1 = int((y_train == 1).sum())
-    spw = n0 / (n1 + 1e-9)   # scale_pos_weight fijo según desbalance
+    spw = n0 / (n1 + 1e-9) 
 
     def objective(trial: optuna.Trial) -> float:
         params = {
@@ -293,7 +266,6 @@ def evaluate(model, X_test, y_test, X_train, y_train, name: str):
     print(classification_report(y_test, pred, target_names=['CPU (0)', 'GPU (1)']))
     return pred, proba, acc, f1, auc, cv
 
-# Figuras
 def fig1_evaluation(y_test, rf_pred, rf_proba, xgb_pred, xgb_proba,
                     rf_auc, xgb_auc, rf_acc, rf_f1, rf_cv,
                     xgb_acc, xgb_f1, xgb_cv, out: str):
@@ -560,7 +532,6 @@ def fig4_confidence(df, idx_test, y_test, rf_pred, rf_proba, xgb_proba, out: str
     plt.close(fig)
     print(f"  [OK] {out}")
 
-# Figura Optuna
 def fig5_optuna(rf_study, xgb_study, out: str):
     """
     Dos subplots:
@@ -572,14 +543,13 @@ def fig5_optuna(rf_study, xgb_study, out: str):
     fig.suptitle('Optuna Hyperparameter Optimization History',
                  fontsize=13, fontweight='bold', color=PALETTE['text'])
 
-    # Historia de optimización
     ax = axes[0]; ax.set_facecolor(PALETTE['bg'])
     for study, color, label in [
         (rf_study,  PALETTE['rf'],  'Random Forest'),
         (xgb_study, PALETTE['xgb'], 'XGBoost'),
     ]:
         vals = [t.value for t in study.trials if t.value is not None]
-        # Mejor acumulado hasta el trial i
+      
         best_so_far = np.maximum.accumulate(vals)
         ax.plot(range(1, len(vals)+1), vals,
                 color=color, alpha=0.30, lw=1)
@@ -596,11 +566,10 @@ def fig5_optuna(rf_study, xgb_study, out: str):
         rf_imp  = get_param_importances(rf_study)
         xgb_imp = get_param_importances(xgb_study)
 
-        # Normalizar y ordenar
+
         rf_s  = pd.Series(rf_imp).sort_values(ascending=True)
         xgb_s = pd.Series(xgb_imp).sort_values(ascending=True)
 
-        # Dibujar barras horizontales solapadas
         all_params = sorted(set(rf_s.index) | set(xgb_s.index))
         yp = np.arange(len(all_params))
         w  = 0.4
@@ -732,7 +701,6 @@ def main():
     print()
     print(f"  Figuras guardadas en: {out}/")
     print("=" * 65)
-
 
 if __name__ == '__main__':
     main()
