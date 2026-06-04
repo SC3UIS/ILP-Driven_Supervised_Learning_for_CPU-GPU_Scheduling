@@ -19,22 +19,6 @@ Experiments were conducted on two hardware platforms at the SC3 HPC facility of 
 
 ---
 
-## Repository Structure
-
-```
-.
-├── benchmark_gpu_nvidia.cu     # GPU kernel benchmarks (GEMM, SpMV, FFT) — CUDA/cuBLAS/cuSPARSE/cuFFT
-├── benchmark_cpu_intel.cpp     # CPU kernel benchmarks for Intel nodes — MKL/FFTW3
-├── ILP_pacca.py                # ILP solver for HPE XL290n G10+ (NVIDIA A100) platform
-├── ILP_thor.py                 # ILP solver for HPE DL580 G9 (Tesla M40) platform
-├── ML_models.py                # ML training pipeline — Random Forest and XGBoost with Optuna HPO
-├── results_pacca_labeled.csv   # Labeled dataset for PACCA platform (ILP-annotated)
-├── results_thor_labeled.csv    # Labeled dataset for THOR platform (ILP-annotated)
-└── README.md
-```
-
----
-
 ## Benchmarks
 
 Each benchmark measures **execution time** and **energy consumption** for GEMM, SpMV, and FFT across a range of problem sizes, CPU core configurations, and (for SpMV) matrix sparsity levels.
