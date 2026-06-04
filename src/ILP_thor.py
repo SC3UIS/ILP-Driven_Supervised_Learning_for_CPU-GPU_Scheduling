@@ -22,7 +22,7 @@ ALPHA        = 0.3   #  peso de la energía en la función objetivo
 GAMMA        = 0.85  # fracción máxima de tareas asignadas a GPU (R3)
 R4_THRESHOLD = 0.5   # umbral T_gpu / T_cpu para R4
 
-# Límites R1 y R2 - se leen del CSV en load_and_normalize
+# Límites R1 y R2
 GPU_MEM_LIMIT = None
 GPU_BW_LIMIT  = None
 
@@ -89,22 +89,17 @@ def memory_gb(row) -> float:
     else:  # FFT
         return (N * 8 + (N // 2 + 1) * 16) / 1e9
 
-# Solver ILP - una ejecución por subconjunto de cores
 def solve_ilp(df: pd.DataFrame,
               cores: int,
               time_limit: int = 300,
               verbose: bool = False) -> tuple:
-    """
-    Resuelve el ILP para las filas que corresponden a 'cores' núcleos CPU.
-    Retorna (labels_array, obj_val).
-    """
+                  
     n = len(df)
     T_cpu = df["cpu_time_s"].values.astype(float)
     T_gpu = df["gpu_time_s"].values.astype(float)
     E_cpu = df["cpu_energy_j"].values.astype(float)
     E_gpu = df["gpu_energy_j"].values.astype(float)
 
-    # σ: escala energía (J) → tiempo (s)
     sigma = (T_cpu.sum() + T_gpu.sum()) / (E_cpu.sum() + E_gpu.sum() + 1e-12)
     log.info(f"  σ = {sigma:.6f}")
 
@@ -244,11 +239,9 @@ def main():
     cores_list = sorted(df_all["CPU_Cores"].unique())
     log.info(f"Configuraciones: {cores_list}")
 
-    # Columnas de resultado
     df_all["ilp_label"] = -1
     df_all["ilp_obj"]   = np.nan
 
-    # Un ILP por cada configuración de cores
     for cores in cores_list:
         log.info(f"\n{'─'*60}")
         log.info(f"Resolviendo ILP para {cores} cores ({len(df_all[df_all['CPU_Cores']==cores])} tareas)...")
@@ -267,7 +260,6 @@ def main():
 
     df_all.to_csv(out, index=False, float_format="%.8g")
     log.info(f"Dataset etiquetado guardado en: {out}")
-
 
 if __name__ == "__main__":
     main()
