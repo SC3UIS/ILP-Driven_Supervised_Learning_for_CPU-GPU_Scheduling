@@ -1,84 +1,147 @@
 # ILP-Driven Supervised Learning for Co-Optimizing Performance and Energy in CPU-GPU Architectures
 
-## Overview
+> **CARLA 2026** — Latin American High Performance Computing Conference  
+> Universidad Industrial de Santander (UIS) — [SC3UIS Research Group](https://sc3.uis.edu.co)
 
-This repository contains the full experimental infrastructure for a hybrid **ILP+ML** scheduling methodology for heterogeneous CPU-GPU systems. The proposed approach uses Integer Linear Programming (ILP) to generate provably optimal CPU-GPU task assignments, which are then used as labeled training data for supervised classification models (Random Forest and XGBoost). At runtime, the trained models predict near-optimal assignments in near-constant time, enabling energy-aware scheduling without the computational overhead of solving an ILP at every decision point.
+---
 
-The methodology is validated on three representative HPC computational kernels:
+## What is this project?
 
-- **GEMM** — General Matrix-Matrix Multiplication (compute-bound)
-- **SpMV** — Sparse Matrix-Vector Multiplication (memory-bound)
-- **FFT** — Fast Fourier Transform (mixed intensity)
+This repository implements a hybrid ILP+ML scheduling framework for heterogeneous CPU-GPU systems. The core idea is simple: instead of solving a computationally expensive Integer Linear Program at every scheduling decision, we solve it **once offline** to generate provably optimal CPU-GPU task assignments, then train supervised classifiers (Random Forest and XGBoost) to **replicate those decisions in near-constant time** at runtime.
 
-Experiments were conducted on two hardware platforms at the SC3 HPC facility of UIS:
+The result is a scheduler that is:
+- **Optimal-quality** — decisions are grounded in ILP-optimal labels
+- **Fast** — ML inference replaces online optimization
+- **Energy-aware** — the ILP objective jointly minimizes latency and energy consumption
 
-| Platform | CPU | GPU |
+The methodology is validated on three representative HPC kernels across two hardware platforms:
+
+| Kernel | Type | Libraries |
 |---|---|---|
-| HPE ProLiant XL290n G10+ | Intel Xeon Gold 5315Y | NVIDIA A100 40GB |
-| HPE ProLiant DL580 G9 | Intel Xeon E5-4640 | NVIDIA Tesla M40 24GB |
+| GEMM | Compute-bound | cuBLAS / MKL |
+| SpMV | Memory-bound | cuSPARSE / MKL Inspector-Executor |
+| FFT | Mixed intensity | cuFFT / MKL DFTI |
+
+| Platform | Alias | CPU | GPU |
+|---|---|---|---|
+| HPE ProLiant XL290n G10+ | PACCA | Intel Xeon Gold 5315Y (3.2 GHz) | NVIDIA A100 40 GB |
+| HPE ProLiant DL580 G9 | THOR | Intel Xeon E5-4640 (2.67 GHz) | NVIDIA Tesla M40 24 GB |
 
 ---
 
-## Benchmarks
+## How to Use
 
-Each benchmark measures **execution time** and **energy consumption** for GEMM, SpMV, and FFT across a range of problem sizes, CPU core configurations, and (for SpMV) matrix sparsity levels.
+### Prerequisites
 
-- **`benchmark_gpu_nvidia.cu`** — Implements GEMM via `cublasDgemm`, SpMV via `cusparseSpMV`, and FFT via `cuFFT`. Energy is sampled via NVML at 10 ms intervals from a dedicated pthread.
-- **`benchmark_cpu_intel.cpp`** — Uses Intel MKL (`cblas_dgemm`, Inspector-Executor SpMV, DFTI) with AVX-512 vectorization. Energy via Intel RAPL sysfs.
+**Python (≥ 3.9):**
+```bash
+pip install pulp pandas numpy scikit-learn xgboost optuna matplotlib seaborn
+```
 
-All benchmarks follow the same measurement protocol: **3 warm-up runs** (discarded) followed by **5 measured repetitions**, reporting the median execution time and integrated energy.
+**C++/CUDA (per platform):**
 
----
-
-## ILP Solver
-
-The ILP model formulates CPU-GPU task assignment as a binary optimization problem minimizing a weighted combination of total execution latency and energy consumption:
-
-$$\min\ Z(\mathbf{x}) = Z_L(\mathbf{x}) + \alpha \cdot \sigma \cdot Z_E(\mathbf{x})$$
-
-with $\alpha = 0.3$ (energy policy weight) and hardware constraints on GPU memory capacity, memory bandwidth, and maximum GPU occupancy. The model is solved offline using **PuLP with the CBC solver**.
-
-- **`ILP_pacca.py`** — Configured for the HPE XL290n G10+ node (NVIDIA A100, 40 GB VRAM, 1555 GB/s bandwidth).
-- **`ILP_thor.py`** — Configured for the HPE DL580 G9 node (Tesla M40, 24 GB VRAM, 288 GB/s bandwidth).
-
-Both scripts read a raw results CSV, solve the ILP for each CPU-core configuration, and output a labeled dataset with the optimal binary assignment (`ilp_label`: 0 = CPU, 1 = GPU) appended as a column.
+| Platform | Compiler | Required libraries |
+|---|---|---|
+| NVIDIA GPU | `nvcc` (CUDA 12.x) | cuBLAS, cuSPARSE, cuFFT, NVML |
+| Intel CPU | `icpx` or `g++` | Intel MKL (oneAPI 2024) |
 
 ---
 
-## ML Pipeline
+### Step 1 — Compile and Run Benchmarks
 
-**`ML_models.py`** trains and evaluates two ensemble classifiers on the ILP-labeled dataset:
+#### NVIDIA GPU (PACCA)
+```bash
+nvcc -O3 -arch=sm_52 -std=c++11  src/benchmark_gpu_nvidia.cu -L/usr/lib64 -lnvidia-ml -lcublas -lcusparse -lcufft -lpthread -o bin/benchmark_titanx_2
+```
 
-- **Random Forest** — Bootstrap aggregation with random feature subsets (MDI importance).
-- **XGBoost** — Additive gradient boosting with second-order Taylor approximation of cross-entropy loss.
+#### NVIDIA GPU (THOR)
+```bash
+nvcc -O3 -arch=sm_52 -allow-unsupported-compiler benchmark_gpu_nvidia.cu -L/usr/lib64 -lnvidia-ml -lcublas -lcusparse -lcufft -lpthread -o benchmark_titanx
+```
 
-Hyperparameter optimization is performed via **Optuna TPE** (100 trials per model, 5-fold stratified CV, ROC-AUC as objective). The script produces the following outputs:
+#### Intel CPU (PACCA)
+```bash
+g++ -O3 -march=native -std=c++17 src/benchmark_cpu_intel.cpp -I${MKLROOT}/include -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl -o bin/cpu_intel_dataset
+```
+
+#### Intel CPU (THOR)
+```bash
+g++ -O3 -march=native -std=c++17 src/benchmark_cpu_intel.cpp -I${MKLROOT}/include -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -fopenmp -lpthread -lm -ldl -o bin/cpu_intel_dataset_16
+```
 
 ---
 
-## Datasets
+### Step 2 — Generate ILP Labels
 
-The labeled CSV files contain one row per experimental observation with the following columns:
+Each ILP script reads a merged CPU+GPU results CSV for its platform, solves the binary assignment problem for each CPU-core configuration, and appends the `ilp_label` column (0 = CPU, 1 = GPU):
 
-| Column | Description |
-|---|---|
-| `kernel` | Kernel type: GEMM, SpMV, FFT |
-| `N` | Problem size |
-| `sparsity` | Sparsity fraction (SpMV only) |
-| `cpu_cores` | Number of active CPU cores |
-| `cpu_time_s` | Median CPU execution time (seconds) |
-| `gpu_time_s` | Median GPU execution time (seconds) |
-| `cpu_energy_j` | CPU energy consumption (Joules) |
-| `gpu_energy_j` | GPU energy consumption (Joules) |
-| `speedup` | Ratio $T_\text{cpu} / T_\text{gpu}$ |
-| `op_intensity_cpu` | Operational intensity on CPU (FLOP/byte) |
-| `op_intensity_gpu` | Operational intensity on GPU (FLOP/byte) |
-| `ilp_label` | ILP-optimal assignment: 0 = CPU, 1 = GPU |
+```bash
+# PACCA platform
+python src/ILP_pacca.py --input results_pacca.csv
+
+# THOR platform
+python src/ILP_thor.py --input results_thor.csv
+```
+
+The solver prints a per-kernel assignment summary to stdout:
+
+```
+  ── 8 cores ──────────────────────────────────────────────
+        Total  CPU  GPU  GPU_%  Speedup
+kernel
+FFT        28   25    3   10.7    14.66
+GEMM       33   20   13   39.4    19.02
+SpMV       79   77    2    2.5    10.96
+  Total:  18 GPU (12.9%)  /  122 CPU (87.1%)
+  Z obj : 7.865   |  Solve time: 0.043s
+```
+
+> Pre-generated labeled datasets are available in [`data/`](data/) — skip this step if you want to use them directly.
+
+---
+
+### Step 3 — Train ML Models
+
+Merge both labeled datasets and run the ML pipeline:
+
+```bash
+# Train Random Forest and XGBoost with Optuna HPO (100 trials each)
+python src/ML_models.py --input results.csv
+```
+
+The script outputs five diagnostic figures. Pre-generated versions are in [`data/`](data/):
+
+| Figure | Description | Link |
+|---|---|---|
+| `fig1_model_evaluation.png` | Confusion matrices, ROC/PR curves, metric comparison | [view](data/fig1_model_evaluation.png) |
+| `fig2_feature_importance.png` | RF MDI vs XGBoost importance by gain | [view](data/fig2_feature_importance.png) |
+| `fig3_learning_dynamics.png` | Learning curves and per-kernel accuracy | [view](data/fig3_learning_dynamics.png) |
+| `fig4_confidence_analysis.png` | Prediction confidence vs speedup ratio | [view](data/fig4_confidence_analysis.png) |
+| `fig5_optuna_history.png` | Optuna HPO history and fANOVA hyperparameter importance | [view](data/fig5_optuna_history.png) |
+
+---
+
+## Results Summary
+
+| Model | Accuracy | F1 Macro | ROC-AUC | CV-AUC |
+|---|---|---|---|---|
+| Random Forest | 0.944 | 0.805 | 0.896 | 0.939 ± 0.035 |
+| XGBoost | 0.913 | 0.770 | 0.935 | 0.939 ± 0.030 |
+
+Per-kernel accuracy: **FFT** 1.000 / 0.958 — **SpMV** 0.976 / 0.976 — **GEMM** 0.865 / 0.788 (RF / XGBoost).
+
+Kernel performance profiles are available in [`data/`](data/):
+
+| Kernel | PACCA | THOR |
+|---|---|---|
+| GEMM | [view](data/GEMM-PACCA.png) | [view](data/GEMM-THOR.jpeg) |
+| SpMV (sparsity=1e-5) | [view](data/SPMV2-PACCA.png) | [view](data/SPMV2-THOR.jpeg) |
+| SpMV (sparsity=1e-2) | [view](data/SPMV5-PACCA.png) | [view](data/SPMV5-THOR.jpeg) |
+| FFT | [view](data/FFT-PACCA.png) | [view](data/FFT-THOR.jpeg) |
 
 ---
 
 ## Citation
-
 
 ```bibtex
 @inproceedings{lemus2026ilpml,
