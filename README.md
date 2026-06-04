@@ -1,7 +1,7 @@
 # ILP-Driven Supervised Learning for Co-Optimizing Performance and Energy in CPU-GPU Architectures
 
 > **CARLA 2026** — Latin American High Performance Computing Conference  
-> Universidad Industrial de Santander (UIS) — [SC3UIS Research Group](https://sc3.uis.edu.co)
+> Universidad Industrial de Santander (UIS) — [SC3UIS Research Group]([https://sc3.uis.edu.co](https://github.com/SC3UIS))
 
 ---
 
