@@ -178,7 +178,6 @@ def optimize_rf(X_train: np.ndarray, y_train: np.ndarray,
 
     return best, study
 
-
 def optimize_xgb(X_train: np.ndarray, y_train: np.ndarray,
                  n_trials: int = OPTUNA_TRIALS) -> dict:
                    
@@ -235,7 +234,6 @@ def optimize_xgb(X_train: np.ndarray, y_train: np.ndarray,
 
 def build_rf(params: dict) -> RandomForestClassifier:
     return RandomForestClassifier(**params)
-
 
 def build_xgb(params: dict) -> XGBClassifier:
     return XGBClassifier(**params)
@@ -354,7 +352,6 @@ def fig1_evaluation(y_test, rf_pred, rf_proba, xgb_pred, xgb_proba,
     plt.close(fig)
     print(f"  [OK] {out}")
 
-
 def fig2_importance(rf_model, xgb_model, X_test, y_test, out: str):
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
     fig.patch.set_facecolor(PALETTE['bg'])
@@ -402,7 +399,6 @@ def fig2_importance(rf_model, xgb_model, X_test, y_test, out: str):
     fig.savefig(out, dpi=150, bbox_inches='tight', facecolor=PALETTE['bg'])
     plt.close(fig)
     print(f"  [OK] {out}")
-
 
 def fig3_learning(rf_model, xgb_model, X, y, X_train, y_train,
                   df, idx_test, rf_pred, xgb_pred, y_test, out: str):
@@ -485,7 +481,6 @@ def fig3_learning(rf_model, xgb_model, X, y, X_train, y_train,
     plt.close(fig)
     print(f"  [OK] {out}")
 
-
 def fig4_confidence(df, idx_test, y_test, rf_pred, rf_proba, xgb_proba, out: str):
     kernels     = df['kernel_type'].unique().tolist()
     cmap_k      = {k: c for k, c in zip(
@@ -533,11 +528,6 @@ def fig4_confidence(df, idx_test, y_test, rf_pred, rf_proba, xgb_proba, out: str
     print(f"  [OK] {out}")
 
 def fig5_optuna(rf_study, xgb_study, out: str):
-    """
-    Dos subplots:
-      - Izquierda : historia de trials (valor objetivo por trial) para RF y XGBoost
-      - Derecha   : importancia de hiperparámetros estimada por Optuna (fANOVA)
-    """
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     fig.patch.set_facecolor(PALETTE['bg'])
     fig.suptitle('Optuna Hyperparameter Optimization History',
