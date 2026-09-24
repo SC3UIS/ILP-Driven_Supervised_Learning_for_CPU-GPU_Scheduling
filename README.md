@@ -165,6 +165,7 @@ Kernel performance profiles are available in [`data/`](data/):
 
 - **Anderson Jahir Lemus Ramírez** — Universidad Industrial de Santander / SC3UIS
 - **Johan Sebastian Galvis Beltrán** — Universidad Industrial de Santander / SC3UIS
+- **Santiago Mauricio Caicedo Rodríguez** — Universidad Industrial de Santander / SC3UIS
 - **Luis Alejandro Torres Niño** — Universidad Industrial de Santander / SC3UIS
 - **Carlos Jaimes Barrios Hernandez** — Universidad Industrial de Santander / SC3UIS / LIG-INRIA Grenoble / INSA Lyon
 
